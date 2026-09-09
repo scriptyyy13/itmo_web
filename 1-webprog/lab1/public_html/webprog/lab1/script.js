@@ -177,6 +177,46 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function playNoseSound() {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = 'sine';
+
+        // сам звук
+        osc.frequency.setValueAtTime(900, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime((Math.floor(Math.random() * (1500 - 400 + 1)) + 400), audioCtx.currentTime + 0.15);
+
+        gain.gain.setValueAtTime(0.7, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+    }
+
+    // отслеживаем клик по холсту
+    canvas.addEventListener("click", (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = event.clientX - rect.left;
+        const mouseY = event.clientY - rect.top;
+
+        // смещение координат
+        const relativeX = mouseX - centerX;
+        const relativeY = mouseY - centerY;
+
+        // зона клика
+        const isNoseX = relativeX >= -40 && relativeX <= -10;
+        const isNoseY = relativeY >= 10 && relativeY <= 65;
+
+        if (isNoseX && isNoseY) {
+            playNoseSound();
+        }
+    });
+
     // проверка попаданий
     function checkHit(x, y, r) {
         // в прямоугольник
