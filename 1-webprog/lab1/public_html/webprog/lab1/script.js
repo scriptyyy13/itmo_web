@@ -250,7 +250,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }).format(dateObj);
 
             const hitClass = pt.hit ? "hit-true" : "hit-false";
-            const hitText = pt.hit ? "Попадание" : "Промах";
+            const hitText = pt.hit ? "Есть пробитие" : "Промазал";
 
             tr.innerHTML = `
                 <td>${pt.x}</td>
