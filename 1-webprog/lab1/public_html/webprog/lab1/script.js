@@ -8,6 +8,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const scale = 120;
     var selectedX = [];
 
+    // Палитра цветов для различных R
+    const areaColors = [
+        { fill: "rgba(113, 128, 150, 0.4)", stroke: "#4a5568" },
+        { fill: "rgba(236, 72, 153, 0.4)",  stroke: "#db2777" },
+        { fill: "rgba(59, 130, 246, 0.4)",  stroke: "#2563eb" },
+        { fill: "rgba(16, 185, 129, 0.4)",  stroke: "#059669" },
+        { fill: "rgba(245, 158, 11, 0.4)",  stroke: "#d97706" }
+    ];
+
     // Фон для канваса
     const bgImage = new Image();
     bgImage.src = "../../img/cat.png";
@@ -18,33 +27,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // Загрузка сохранения
     let pointsHistory = JSON.parse(localStorage.getItem("lab1_points")) || [];
 
-    // Обработка выбора одного значения чекбоксов для X и R
+    // Обработка выбора значений чекбоксов для X и R
     setupMultipuleCheckboxGroup("x");
-    setupOneCheckboxGroup("r");
+    setupMultipuleCheckboxGroup("r");
 
     function setupMultipuleCheckboxGroup(name) {
         const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
         checkboxes.forEach(cb => {
             cb.addEventListener("change", () => {
-                let arrayOfX = [];
+                let arrayOfValues = [];
                 checkboxes.forEach(all => {
                     if (all.checked) {
-                        arrayOfX.push(parseFloat(all.value));
+                        arrayOfValues.push(parseFloat(all.value));
                     }
                 });
-                selectedX = arrayOfX;
-            });
-        });
-    }
-
-    function setupOneCheckboxGroup(name) {
-        const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
-        checkboxes.forEach(cb => {
-            cb.addEventListener("change", (e) => {
-                if (e.target.checked) {
-                    checkboxes.forEach(other => {
-                        if (other !== e.target) other.checked = false;
-                    });
+                
+                if (name === "x") {
+                    selectedX = arrayOfValues;
                 }
                 if (name === "r") {
                     drawArea(getSelectedR());
@@ -54,12 +53,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function getSelectedR() {
-        const checked = document.querySelector('input[name="r"]:checked');
-        return checked ? parseFloat(checked.value) : null;
+        const checked = document.querySelectorAll('input[name="r"]:checked');
+        return Array.from(checked).map(cb => parseFloat(cb.value));
     }
 
     // Отрисовка области и всех точек
-    function drawArea(r) {
+    function drawArea(rList) {
         ctx.clearRect(0, 0, width, height);
 
         // отрисовка фона
@@ -70,32 +69,42 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.restore();
         }
 
+        // ищем максимальное R для масштабирования
+        const maxR = (rList && rList.length > 0) ? Math.max(...rList) : null;
+
         // область отрисовки
-        if (r && r > 0) {
-            const unit = scale / r;
+        if (rList && rList.length > 0) {
+            // сортируем R по убыванию, чтобы меньшие области рисовались поверх больших
+            const sortedR = [...rList].sort((a, b) => b - a);
 
-            ctx.fillStyle = "rgba(113, 128, 150, 0.5)";
-            ctx.strokeStyle = "#4a5568";
-            ctx.beginPath();
+            sortedR.forEach((r, index) => {
+                const unit = scale / maxR;
+                const color = areaColors[index % areaColors.length];
 
-            // прямоугольник
-            ctx.moveTo(centerX, centerY);
-            ctx.lineTo(centerX + r * unit, centerY); // в (R, 0)
-            ctx.lineTo(centerX + r * unit, centerY - (r / 2) * unit); // в (R, R/2)
-            ctx.lineTo(centerX, centerY - (r / 2) * unit); // в (0, R/2)
-            ctx.lineTo(centerX, centerY); // возврат в (0, 0)
+                ctx.fillStyle = color.fill;
+                ctx.strokeStyle = color.stroke;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
 
-            // четверть круга
-            ctx.arc(centerX, centerY, (r / 2) * unit, 0, Math.PI / 2, false);
+                // прямоугольник
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(centerX + r * unit, centerY); // в (R, 0)
+                ctx.lineTo(centerX + r * unit, centerY - (r / 2) * unit); // в (R, R/2)
+                ctx.lineTo(centerX, centerY - (r / 2) * unit); // в (0, R/2)
+                ctx.lineTo(centerX, centerY); // возврат в (0, 0)
 
-            // треугольник
-            ctx.lineTo(centerX, centerY + r * unit); // в (0, -R)
-            ctx.lineTo(centerX - (r / 2) * unit, centerY); // в (-R/2, 0)
-            ctx.lineTo(centerX, centerY); // возврат в центр (0, 0)
+                // четверть круга
+                ctx.arc(centerX, centerY, (r / 2) * unit, 0, Math.PI / 2, false);
 
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+                // треугольник
+                ctx.lineTo(centerX, centerY + r * unit); // в (0, -R)
+                ctx.lineTo(centerX - (r / 2) * unit, centerY); // в (-R/2, 0)
+                ctx.lineTo(centerX, centerY); // возврат в центр (0, 0)
+
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            });
         }
 
         // оси координат
@@ -135,8 +144,8 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.fillText("y", centerX + 8, 14);
 
         // деления осей
-        const rVal = r || "R";
-        const rHalfVal = r ? (r / 2) : "R/2";
+        const rVal = maxR || "R";
+        const rHalfVal = maxR ? (maxR / 2) : "R/2";
 
         const labels = [
             { x: centerX + scale, y: centerY + 14, text: rVal },
@@ -173,9 +182,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // отрисовка точек
         pointsHistory.forEach(pt => {
-            if (r && r > 0) {
-                const px = centerX + (pt.x / r) * scale;
-                const py = centerY - (pt.y / r) * scale;
+            if (maxR && maxR > 0) {
+                const px = centerX + (pt.x / maxR) * scale;
+                const py = centerY - (pt.y / maxR) * scale;
 
                 ctx.beginPath();
                 ctx.arc(px, py, 4, 0, 2 * Math.PI);
@@ -270,7 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // R
         const rVal = getSelectedR();
         const rErr = document.getElementById("r-error");
-        if (rVal === null) {
+        if (rVal.length < 1) {
             rErr.style.display = "block";
             isValid = false;
         } else {
@@ -322,23 +331,25 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!validData) return;
 
         validData.x.forEach(xVal => {
-            const startTime = performance.now();
-            
-            const hit = checkHit(xVal, validData.y, validData.r);
-            
-            const endTime = performance.now();
-            const executionTime = (endTime - startTime).toFixed(3);
+            validData.r.forEach(rVal => {
+                const startTime = performance.now();
+                
+                const hit = checkHit(xVal, validData.y, rVal);
+                
+                const endTime = performance.now();
+                const executionTime = (endTime - startTime).toFixed(3);
 
-            const newPoint = {
-                x: xVal,
-                y: validData.y,
-                r: validData.r,
-                hit: hit,
-                timestamp: Date.now(),
-                executionTime: executionTime
-            };
+                const newPoint = {
+                    x: xVal,
+                    y: validData.y,
+                    r: rVal,
+                    hit: hit,
+                    timestamp: Date.now(),
+                    executionTime: executionTime
+                };
 
-            pointsHistory.push(newPoint);
+                pointsHistory.push(newPoint);
+            });
         });
 
         localStorage.setItem("lab1_points", JSON.stringify(pointsHistory));
