@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const centerX = width / 2;
     const centerY = height / 2;
     const scale = 120;
+    var selectedX = [];
 
     // Фон для канваса
     const bgImage = new Image();
@@ -18,10 +19,25 @@ document.addEventListener("DOMContentLoaded", () => {
     let pointsHistory = JSON.parse(localStorage.getItem("lab1_points")) || [];
 
     // Обработка выбора одного значения чекбоксов для X и R
-    setupCheckboxGroup("x");
-    setupCheckboxGroup("r");
+    setupMultipuleCheckboxGroup("x");
+    setupOneCheckboxGroup("r");
 
-    function setupCheckboxGroup(name) {
+    function setupMultipuleCheckboxGroup(name) {
+        const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
+        checkboxes.forEach(cb => {
+            cb.addEventListener("change", () => {
+                let arrayOfX = [];
+                checkboxes.forEach(all => {
+                    if (all.checked) {
+                        arrayOfX.push(parseFloat(all.value));
+                    }
+                });
+                selectedX = arrayOfX;
+            });
+        });
+    }
+
+    function setupOneCheckboxGroup(name) {
         const checkboxes = document.querySelectorAll(`input[name="${name}"]`);
         checkboxes.forEach(cb => {
             cb.addEventListener("change", (e) => {
@@ -39,11 +55,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function getSelectedR() {
         const checked = document.querySelector('input[name="r"]:checked');
-        return checked ? parseFloat(checked.value) : null;
-    }
-
-    function getSelectedX() {
-        const checked = document.querySelector('input[name="x"]:checked');
         return checked ? parseFloat(checked.value) : null;
     }
 
@@ -236,9 +247,8 @@ document.addEventListener("DOMContentLoaded", () => {
         let isValid = true;
 
         // X
-        const xVal = getSelectedX();
         const xErr = document.getElementById("x-error");
-        if (xVal === null) {
+        if (selectedX.length < 1) {
             xErr.style.display = "block";
             isValid = false;
         } else {
@@ -267,7 +277,7 @@ document.addEventListener("DOMContentLoaded", () => {
             rErr.style.display = "none";
         }
 
-        return isValid ? { x: xVal, y: yNum, r: rVal } : null;
+        return isValid ? { x: selectedX, y: yNum, r: rVal } : null;
     }
 
     // обновление таблички
@@ -307,27 +317,31 @@ document.addEventListener("DOMContentLoaded", () => {
     // отправка формы
     document.getElementById("point-form").addEventListener("submit", (e) => {
         e.preventDefault();
-        const startTime = performance.now();
 
         const validData = validateForm();
         if (!validData) return;
 
-        const hit = checkHit(validData.x, validData.y, validData.r);
-        const endTime = performance.now();
-        const executionTime = (endTime - startTime).toFixed(3);
+        validData.x.forEach(xVal => {
+            const startTime = performance.now();
+            
+            const hit = checkHit(xVal, validData.y, validData.r);
+            
+            const endTime = performance.now();
+            const executionTime = (endTime - startTime).toFixed(3);
 
-        const newPoint = {
-            x: validData.x,
-            y: validData.y,
-            r: validData.r,
-            hit: hit,
-            timestamp: Date.now(),
-            executionTime: executionTime
-        };
+            const newPoint = {
+                x: xVal,
+                y: validData.y,
+                r: validData.r,
+                hit: hit,
+                timestamp: Date.now(),
+                executionTime: executionTime
+            };
 
-        pointsHistory.push(newPoint);
+            pointsHistory.push(newPoint);
+        });
+
         localStorage.setItem("lab1_points", JSON.stringify(pointsHistory));
-
         renderTable();
         drawArea(validData.r);
     });
