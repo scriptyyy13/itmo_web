@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let timeOffset = 0; // разница часов сервера и клиента
+    let isServerAvailable = false; // флаг доступности сервера
 
     // если вдруг не загрузилась картинка
     const bgImage = new Image();
@@ -27,7 +28,6 @@ document.addEventListener("DOMContentLoaded", () => {
         drawArea(getSelectedR());
     };
     bgImage.onerror = () => {
-        // если картинка не загрузилась локально, все равно рисуем график
         drawArea(getSelectedR());
     };
     bgImage.src = "img/cat.png";
@@ -65,7 +65,6 @@ document.addEventListener("DOMContentLoaded", () => {
     function drawArea(r) {
         ctx.clearRect(0, 0, width, height);
 
-        // фон с котом
         try {
             if (bgImage.complete && bgImage.naturalWidth !== 0) {
                 ctx.save();
@@ -73,9 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ctx.drawImage(bgImage, 0, 0, width, height);
                 ctx.restore();
             }
-        } catch (e) {
-            // игнорим ужасы
-        }
+        } catch (e) {}
 
         if (r && r > 0) {
             const unit = scale / r;
@@ -85,7 +82,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.lineWidth = 1.5;
             ctx.beginPath();
 
-            // фигура
             ctx.moveTo(centerX, centerY);
             ctx.arc(centerX, centerY, (r / 2) * unit, -Math.PI / 2, 0, false);
             ctx.lineTo(centerX + (r / 2) * unit, centerY + r * unit);
@@ -97,7 +93,6 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.stroke();
         }
 
-        // оси
         ctx.strokeStyle = "#2d3748";
         ctx.lineWidth = 1.5;
         ctx.fillStyle = "#2d3748";
@@ -160,7 +155,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         labels.forEach(l => ctx.fillText(l.text, l.x, l.y));
 
-        // точки из истории
         pointsHistory.forEach(pt => {
             if (r && r > 0) {
                 const px = centerX + (pt.x / r) * scale;
@@ -236,6 +230,25 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // маркировка сервера как неактивного
+    function setServerOffline(msg) {
+        isServerAvailable = false;
+        const stateEl = document.getElementById("server-state");
+        const toEl = document.getElementById("time-to-server");
+        const fromEl = document.getElementById("time-from-server");
+        const totalpingEm = document.getElementById("time-tofrom-server");
+
+        if (stateEl) {
+            stateEl.textContent = "Недоступен";
+            stateEl.className = "state-offline";
+        }
+        if (toEl) toEl.textContent = "--";
+        if (fromEl) fromEl.textContent = "--";
+        if (totalpingEm) totalpingEm.textContent = "--";
+
+        if (msg) showServerError(msg);
+    }
+
     // подсчет времени от/до сервера
     function updateServerTimeDiff() {
         const stateEl = document.getElementById("server-state");
@@ -243,58 +256,80 @@ document.addEventListener("DOMContentLoaded", () => {
         const fromEl = document.getElementById("time-from-server");
         const totalpingEm = document.getElementById("time-tofrom-server");
 
-        // если superagent не подгрузился или работаем без сервера
         if (typeof superagent === "undefined") {
-            if (stateEl) {
-                stateEl.textContent = "Недоступен";
-                stateEl.className = "state-offline";
-            }
+            setServerOffline("Библиотека superagent не загружена");
             return;
         }
 
         const t1 = Date.now();
 
-        // синхронизация времени
         superagent
             .get(SERVER_URL)
             .query({ action: "getServerUnixTime" })
+            .accept('text/plain')
             .timeout(2000)
             .end((err, res) => {
-                if (err || !res || !res.ok) {
-                    if (stateEl) {
-                        stateEl.textContent = "Недоступен";
-                        stateEl.className = "state-offline";
-                    }
-                    if (toEl) toEl.textContent = "--";
-                    if (fromEl) fromEl.textContent = "--";
-                    if (totalpingEm) totalpingEm.textContent = "--";
+                if (err || !res) {
+                    setServerOffline();
+                    return;
+                }
+
+                let serverTime = null;
+                try {
+                    const raw = res.text || (typeof res.body === "string" ? res.body : JSON.stringify(res.body));
+                    const body = typeof raw === "string" ? JSON.parse(raw) : res.body;
+                    serverTime = body ? body.serverUnixTime : null;
+                } catch (e) {
+                    setServerOffline();
+                    return;
+                }
+
+                if (!serverTime) {
+                    setServerOffline();
                     return;
                 }
 
                 const t2 = Date.now();
-                const serverTime = res.body.serverUnixTime;
-                
                 timeOffset = serverTime - (t1 + (t2 - t1) / 2);
 
-                // расчет времени обратно
                 const clientSendTime = Date.now();
 
                 superagent
                     .get(SERVER_URL)
                     .query({ action: "getServerUnixTime" })
+                    .accept('text/plain')
                     .timeout(2000)
                     .end((err2, res2) => {
-                        if (err2 || !res2 || !res2.ok) return;
+                        if (err2 || !res2) {
+                            setServerOffline();
+                            return;
+                        }
+
+                        let serverReceiveTime = null;
+                        try {
+                            const raw2 = res2.text || (typeof res2.body === "string" ? res2.body : JSON.stringify(res2.body));
+                            const body2 = typeof raw2 === "string" ? JSON.parse(raw2) : res2.body;
+                            serverReceiveTime = body2 ? body2.serverUnixTime : null;
+                        } catch (e) {
+                            setServerOffline();
+                            return;
+                        }
+
+                        if (!serverReceiveTime) {
+                            setServerOffline();
+                            return;
+                        }
 
                         const clientReceiveTime = Date.now();
-                        const serverReceiveTime = res2.body.serverUnixTime;
-
                         const adjustedSendTime = clientSendTime + timeOffset;
                         const adjustedReceiveTime = clientReceiveTime + timeOffset;
 
                         let timeTo = Math.max(0, serverReceiveTime - adjustedSendTime);
                         let timeFrom = Math.max(0, adjustedReceiveTime - serverReceiveTime);
                         let totaltime = timeTo + timeFrom;
+
+                        isServerAvailable = true;
+                        showServerError(null);
 
                         if (stateEl) {
                             stateEl.textContent = "Доступен";
@@ -314,6 +349,11 @@ document.addEventListener("DOMContentLoaded", () => {
             e.preventDefault();
             showServerError(null);
 
+            if (!isServerAvailable) {
+                showServerError("Сервер недоступен. Отправка формы невозможна.");
+                return;
+            }
+
             const validData = validateForm();
             if (!validData) return;
 
@@ -323,21 +363,30 @@ document.addEventListener("DOMContentLoaded", () => {
             queryParams.append("r", validData.r);
 
             if (typeof superagent === "undefined") {
-                showServerError("superagent не загружен");
+                showServerError("Библиотека superagent не загружена");
                 return;
             }
 
             superagent
                 .get(SERVER_URL)
                 .query(queryParams.toString())
+                .accept('text/plain')
                 .timeout(2000)
                 .end((err, res) => {
-                    if (err || !res || !res.ok) {
-                        showServerError("Ошибка подключения к сервлету (" + (err ? err.status || 'Недоступен' : res ? res.status : 'Error') + ")");
+                    if (err || !res) {
+                        const statusText = err ? (err.status ? "HTTP " + err.status : err.message) : "Нет ответа";
+                        setServerOffline("Ошибка подключения к сервлету (" + statusText + ")");
                         return;
                     }
 
-                    const responseData = res.body;
+                    let responseData = null;
+                    try {
+                        const raw = res.text || (typeof res.body === "string" ? res.body : JSON.stringify(res.body));
+                        responseData = typeof raw === "string" ? JSON.parse(raw) : res.body;
+                    } catch (e) {
+                        setServerOffline("Сервер вернул невалидный JSON или ошибку HTML");
+                        return;
+                    }
 
                     if (Array.isArray(responseData)) {
                         responseData.forEach(item => pointsHistory.push(item));
@@ -349,6 +398,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         updateServerTimeDiff();
                     } else if (responseData && responseData.error) {
                         showServerError("Сервер вернул ошибку: " + responseData.error);
+                    } else {
+                        showServerError("Получен неизвестный формат ответа от сервера");
                     }
                 });
         });
