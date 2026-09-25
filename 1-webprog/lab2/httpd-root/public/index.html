@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лаба номер два</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- шапка -->
+    <header id="main-header">
+        <h1>Лаба номер два по вебчику</h1>
+        <div class="student-info">
+            <span>ФИО: <strong>Василенко Михаил Вадимович</strong></span> | 
+            <span>Группа: <strong>P3216</strong></span> | 
+            <span>Вариант: <strong>87665</strong></span>
+        </div>
+    </header>
+
+    <main>
+        <div class="content-grid">
+            <div class="left-column">
+                <!-- график -->
+                <div class="card canvas-card">
+                    <h2>Область координат</h2>
+                    <div id="canvas-container">
+                        <canvas id="graph" width="320" height="320"></canvas>
+                    </div>
+                </div>
+
+                <!-- инфо о сервере -->
+                <div class="card server-status-card">
+                    <h2>Информация о сервере</h2>
+                    <div class="status-item">
+                        <span>Статус:</span> <strong id="server-state" class="state-offline">Проверка...</strong>
+                    </div>
+                    <div class="status-item">
+                        <span>Время до сервера:</span> <span id="time-to-server">--</span> мс
+                    </div>
+                    <div class="status-item">
+                        <span>Время от сервера:</span> <span id="time-from-server">--</span> мс
+                    </div>
+                    <div class="status-item">
+                        <span>Общий пинг:</span> <span id="time-tofrom-server">--</span> мс
+                    </div>
+                </div>
+            </div>
+
+            <!-- форма -->
+            <div class="card form-card">
+                <h2>Параметры точки</h2>
+                <form id="point-form" novalidate>
+                    <!-- x -->
+                    <div class="form-group">
+                        <label class="group-title" for="x-input">Изменение X (-5 ... 3):</label>
+                        <input type="text" id="x-input" name="x" maxlength="17" placeholder="Введите число от -5 до 3" autocomplete="off">
+                        <div class="error-message" id="x-error">Введите число в диапазоне от -5 до 3</div>
+                    </div>
+
+                    <!-- y -->
+                    <div class="form-group">
+                        <label class="group-title">Изменение Y (выберите одно или более значений):</label>
+                        <div class="checkbox-group" id="y-checkboxes">
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="-2">-2</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="-1.5">-1.5</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="-1">-1</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="-0.5">-0.5</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="0">0</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="0.5">0.5</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="1">1</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="1.5">1.5</label>
+                            <label class="checkbox-label"><input type="checkbox" name="y" value="2">2</label>
+                        </div>
+                        <div class="error-message" id="y-error">Выберите хотя бы одно значение Y</div>
+                    </div>
+
+                    <!-- r -->
+                    <div class="form-group">
+                        <label class="group-title">Изменение R (выберите одно значение):</label>
+                        <div class="checkbox-group" id="r-radios">
+                            <label class="checkbox-label"><input type="radio" name="r" value="1">1</label>
+                            <label class="checkbox-label"><input type="radio" name="r" value="2">2</label>
+                            <label class="checkbox-label"><input type="radio" name="r" value="3" checked>3</label>
+                            <label class="checkbox-label"><input type="radio" name="r" value="4">4</label>
+                            <label class="checkbox-label"><input type="radio" name="r" value="5">5</label>
+                        </div>
+                        <div class="error-message" id="r-error">Выберите значение R</div>
+                    </div>
+
+                    <!-- баннер ошибки -->
+                    <div id="server-error-banner" class="server-error" style="display: none;"></div>
+
+                    <div class="buttons-group">
+                        <button type="submit" class="btn-submit">Проверить</button>
+                        <button type="button" class="btn-clear" id="clear-btn">Очистить историю</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- таблица -->
+        <div class="card table-card">
+            <h2>История проверок</h2>
+            <table id="results-table">
+                <thead>
+                    <tr>
+                        <th>X</th>
+                        <th>Y</th>
+                        <th>R</th>
+                        <th>Результат</th>
+                        <th>Дата и время проверки</th>
+                        <th>Время работы (мкс)</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <footer id="footer-info">
+        Это подвал | Но тут не будет шутки про детей
+    </footer>
+
+    <!-- скрипты -->
+    <script src="js/superagent.min.js"></script>
+    <script src="js/script.js"></script>
+</body>
+</html>

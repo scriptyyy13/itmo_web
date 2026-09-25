@@ -1,0 +1,314 @@
+/* Базовые сбросы и настройки */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #f4f5f7;
+    color: #333333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Шапка */
+header {
+    background-color: #e5e8ec;
+    color: #2c3e50;
+    font-family: monospace;
+    font-size: 16px;
+    padding: 15px 20px;
+    border-bottom: 2px solid #d0d5dd;
+    width: 100%;
+}
+
+header h1 {
+    font-size: 18px;
+    font-weight: normal;
+    margin-bottom: 5px;
+}
+
+header .student-info {
+    line-height: 1.5;
+}
+
+/* Основной контейнер */
+main {
+    flex: 1;
+    max-width: 1100px;
+    width: 100%;
+    margin: 20px auto;
+    padding: 0 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.content-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+/* Левая колонка для десктопа (график + сервер) */
+.left-column {
+    flex: 1 1 340px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.card {
+    background-color: #ffffff;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.canvas-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.form-card {
+    flex: 1 1 400px;
+}
+
+.server-status-card {
+    width: 100%;
+    font-size: 13px;
+}
+
+.server-status-card h2 {
+    font-size: 14px;
+    color: #4a5568;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-item {
+    margin-bottom: 6px;
+    color: #718096;
+}
+
+h2 {
+    font-size: 16px;
+    color: #4a5568;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #edf2f7;
+    padding-bottom: 8px;
+}
+
+/* Канвас */
+#canvas-container {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    background-color: #fafbfc;
+    border: 1px solid #e1e4e8;
+}
+
+#graph {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+/* Стили формы из 1-й лабы */
+.form-group {
+    margin-bottom: 4%;
+}
+
+.form-group label.group-title {
+    display: block;
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 2%;
+    color: #4a5568;
+}
+
+.checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2%;
+    margin-top: 1%;
+    margin-bottom: 2%;
+}
+
+.checkbox-label {
+    display: inline-flex;
+    align-items: center;
+    font-size: 13px;
+    background-color: #f7fafc;
+    border: 1px solid #cbd5e0;
+    padding: 2% 3%;
+    border-radius: 3px;
+    cursor: pointer;
+    user-select: none;
+    margin-bottom: 1.5%;
+}
+
+.checkbox-label input {
+    margin-right: 5px;
+}
+
+.checkbox-label:hover {
+    background-color: #edf2f7;
+}
+
+/* Селектор атрибута */
+input[type="text"] {
+    width: 100%;
+    padding: 2.5%;
+    font-size: 14px;
+    border: 1px solid #cbd5e0;
+    border-radius: 3px;
+    outline: none;
+    background-color: #ffffff;
+}
+
+input[type="text"]:focus {
+    border-color: #718096;
+    background-color: #fafafa;
+}
+
+.error-message {
+    color: #e53e3e;
+    font-size: 12px;
+    margin-top: 1.5%;
+    display: none;
+}
+
+.server-error {
+    background-color: #fff5f5;
+    border: 1px solid #feb2b2;
+    color: #c53030;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.buttons-group {
+    display: flex;
+    gap: 3%;
+    margin-top: 5%;
+}
+
+button {
+    padding: 2.5% 5%;
+    font-size: 14px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn-submit {
+    background-color: #4a5568;
+    color: #ffffff;
+}
+
+.btn-submit:hover {
+    background-color: #2d3748;
+}
+
+.btn-clear {
+    background-color: #cbd5e0;
+    color: #2d3748;
+}
+
+.btn-clear:hover {
+    background-color: #a0aec0;
+}
+
+.state-online {
+    color: #2f855a;
+}
+
+.state-offline {
+    color: #e53e3e;
+}
+
+/* Таблица результатов */
+.table-card {
+    width: 100%;
+    overflow-x: auto;
+}
+
+#results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+}
+
+#results-table th, #results-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+#results-table th {
+    background-color: #edf2f7;
+    color: #4a5568;
+    font-weight: 600;
+}
+
+#results-table tr:hover {
+    background-color: #f7fafc;
+}
+
+.hit-true::after {
+    content: " ✓";
+    color: #2f855a;
+    font-weight: bold;
+}
+
+.hit-false::after {
+    content: " ✗";
+    color: #c53030;
+    font-weight: bold;
+}
+
+#footer-info {
+    text-align: center;
+    font-size: 12px;
+    color: #718096;
+    padding: 15px;
+    margin-top: auto;
+}
+
+/* устройство адаптивы на экранах поменьше */
+@media (max-width: 820px) {
+    .content-grid {
+        flex-direction: column;
+    }
+
+    .left-column {
+        display: contents;
+    }
+
+    .canvas-card {
+        order: 1;
+        width: 100%;
+    }
+
+    .form-card {
+        order: 2;
+        width: 100%;
+    }
+
+    .server-status-card {
+        order: 3;
+        width: 100%;
+    }
+}
