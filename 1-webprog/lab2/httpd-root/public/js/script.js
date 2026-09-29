@@ -12,6 +12,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const centerY = height / 2;
     const scale = 120;
 
+    // получение уникального userId для текущего пользователя
+    let userId = localStorage.getItem("lab2_user_id");
+    if (!userId) {
+        userId = "user_" + Math.random().toString(36).substring(2, 11) + "_" + Date.now();
+        localStorage.setItem("lab2_user_id", userId);
+    }
+
     let pointsHistory = [];
     try {
         pointsHistory = JSON.parse(localStorage.getItem("lab2_points")) || [];
@@ -19,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
         pointsHistory = [];
     }
 
+    let otherPointsHistory = []; // точки других пользователей
     let timeOffset = 0; // разница часов сервера и клиента
     let isServerAvailable = false; // флаг доступности сервера
 
@@ -155,20 +163,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
         labels.forEach(l => ctx.fillText(l.text, l.x, l.y));
 
-        pointsHistory.forEach(pt => {
-            if (r && r > 0) {
+        // отрисовка точек
+        if (r && r > 0) {
+            const drawPoint = (pt, isOther = false) => {
                 const px = centerX + (pt.x / r) * scale;
                 const py = centerY - (pt.y / r) * scale;
 
                 ctx.beginPath();
                 ctx.arc(px, py, 4, 0, 2 * Math.PI);
-                ctx.fillStyle = pt.hit ? "#2f855a" : "#e53e3e";
+                ctx.fillStyle = isOther 
+                    ? (pt.hit ? "rgba(47, 133, 90, 0.4)" : "rgba(229, 62, 62, 0.4)")
+                    : (pt.hit ? "#2f855a" : "#e53e3e");
                 ctx.fill();
-                ctx.strokeStyle = "#ffffff";
+                ctx.strokeStyle = isOther ? "rgba(255, 255, 255, 0.4)" : "#ffffff";
                 ctx.lineWidth = 1;
                 ctx.stroke();
-            }
-        });
+            };
+
+            // отрисовка чужих и своих точек
+            otherPointsHistory.forEach(pt => drawPoint(pt, true));
+            pointsHistory.forEach(pt => drawPoint(pt, false));
+        }
     }
 
     // валидация
@@ -213,10 +228,15 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!tbody) return;
         tbody.innerHTML = "";
 
-        pointsHistory.slice().reverse().forEach(pt => {
+        const createRow = (pt, isOther = false) => {
             const tr = document.createElement("tr");
             const hitClass = pt.hit ? "hit-true" : "hit-false";
             const hitText = pt.hit ? "Есть пробитие" : "Промазал";
+
+            if (isOther) {
+                tr.style.backgroundColor = "rgba(128, 128, 128, 0.15)";
+                tr.style.opacity = "0.7";
+            }
 
             tr.innerHTML = `
                 <td>${pt.x}</td>
@@ -226,8 +246,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${pt.currentTime}</td>
                 <td>${pt.executionTime}</td>
             `;
-            tbody.appendChild(tr);
-        });
+            return tr;
+        };
+
+        // свои точки
+        pointsHistory.slice().reverse().forEach(pt => tbody.appendChild(createRow(pt)));
+
+        // чужие точки
+        otherPointsHistory.slice().reverse().forEach(pt => tbody.appendChild(createRow(pt, true)));
     }
 
     // маркировка сервера как неактивного
@@ -297,11 +323,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (totalpingEm) totalpingEm.textContent = totalTime.toFixed(1);
     }
 
-    // замер времени от и до сервера
+    // замер времени от и до сервера + получение всех точек
     function updateServerTimeDiff() {
         const clientSendTime = Date.now();
 
-        makeGetRequest({ action: "getServerUnixTime" })
+        makeGetRequest({ action: "getPointOnServer", userId: userId })
             .then(body => {
                 const clientReceiveTime = Date.now();
                 const serverTime = body ? body.serverUnixTime : null;
@@ -323,6 +349,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 const totalTime = timeTo + timeFrom;
 
                 updateServerTimeUI(timeTo, timeFrom, totalTime);
+
+                // фильтрация точек чужих сессий
+                if (body && Array.isArray(body.otherPoints)) {
+                    otherPointsHistory = body.otherPoints.filter(pt => pt.userId !== userId);
+                    renderTable();
+                    drawArea(getSelectedR());
+                }
             })
             .catch(err => {
                 setServerOffline(err.message);
@@ -364,6 +397,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!validData) return;
 
             const queryParams = new URLSearchParams();
+            queryParams.append("userId", userId);
             queryParams.append("x", validData.x);
             validData.y.forEach(yVal => queryParams.append("y", yVal));
             queryParams.append("r", validData.r);
@@ -382,12 +416,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const clearBtn = document.getElementById("clear-btn");
     if (clearBtn) {
         clearBtn.addEventListener("click", () => {
-            pointsHistory = [];
-            try {
-                localStorage.removeItem("lab2_points");
-            } catch (e) {}
-            renderTable();
-            drawArea(getSelectedR());
+            makeGetRequest({ action: "clear", userId: userId })
+                .then(() => {
+                    pointsHistory = [];
+                    try {
+                        localStorage.removeItem("lab2_points");
+                    } catch (e) {}
+                    renderTable();
+                    drawArea(getSelectedR());
+                })
+                .catch(err => {
+                    showServerError("Ошибка при очистке истории: " + err.message);
+                });
         });
     }
 

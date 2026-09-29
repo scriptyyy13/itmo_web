@@ -3,12 +3,16 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class AreaCheckServlet {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
     private static final Double[] RANGE_X = {-5.0, 3.0};
     private static final Double[] RANGE_Y = {-2.0, 2.0};
     private static final Double[] RANGE_R = {1.0, 5.0};
+
+    // коллекция точек
+    private static final Map<String, List<String>> sessionStore = new ConcurrentHashMap<>();
 
     public static void main(String[] args) {
         FCGIInterface fcgiInterface = new FCGIInterface();
@@ -27,11 +31,17 @@ public class AreaCheckServlet {
 
                 Map<String, List<String>> queryParams = parseQueryString(queryString);
 
-                // разделяем запросы
-                if (queryParams.containsKey("action") && "getServerUnixTime".equals(queryParams.get("action").get(0))) {
-                    handleServerUnixTime();
-                } else {
+                // разделяем запросы по экшенам
+                String action = getQueryParam(queryParams, "action");
+
+                if (action == null) {
                     handleAreaCheck(queryParams, startTime);
+                } else {
+                    switch (action) {
+                        case "getPointOnServer" -> handleServerUnixTime(queryParams);
+                        case "clear"            -> handleClearUserPoints(queryParams);
+                        default                 -> handleAreaCheck(queryParams, startTime);
+                    }
                 }
 
             } catch (NumberFormatException e) {
@@ -42,18 +52,38 @@ public class AreaCheckServlet {
         }
     }
 
-    // обработка запроса системного времени
-    private static void handleServerUnixTime() {
+    // обработка запроса системного времени + выдача всех точек
+    private static void handleServerUnixTime(Map<String, List<String>> queryParams) {
         long currentUnixTime = System.currentTimeMillis();
-        String json = String.format("{\"status\":\"ok\",\"serverUnixTime\":%d}", currentUnixTime);
+        String allPointsJson = getAllPointsJson();
+
+        String json = String.format(
+            "{\"status\":\"ok\",\"serverUnixTime\":%d,\"otherPoints\":%s}",
+            currentUnixTime, allPointsJson
+        );
         sendJsonResponse(200, json);
+    }
+
+    // очистка точек конкретного пользователя
+    private static void handleClearUserPoints(Map<String, List<String>> queryParams) {
+        String userId = getQueryParam(queryParams, "userId");
+        if (userId != null && !userId.isEmpty()) {
+            sessionStore.remove(userId);
+        }
+        sendJsonResponse(200, "{\"status\":\"ok\"}");
     }
 
     // обработка запроса на попадание
     private static void handleAreaCheck(Map<String, List<String>> queryParams, long startTime) {
+        String userId = getQueryParam(queryParams, "userId");
         List<String> xVals = queryParams.get("x");
         List<String> yVals = queryParams.get("y");
         List<String> rVals = queryParams.get("r");
+
+        if (userId == null || userId.isEmpty()) {
+            sendJsonError("Не передан userId пользователя");
+            return;
+        }
 
         if (xVals == null || yVals == null || rVals == null || xVals.isEmpty() || yVals.isEmpty() || rVals.isEmpty()) {
             sendJsonError("Не переданы все параметры (x, y, r)");
@@ -73,6 +103,7 @@ public class AreaCheckServlet {
         }
 
         List<String> resultsJson = new ArrayList<>();
+        List<String> userPointsList = sessionStore.computeIfAbsent(userId, k -> Collections.synchronizedList(new ArrayList<>()));
 
         for (String yStr : yVals) {
             double y = Double.parseDouble(yStr.replace(',', '.'));
@@ -86,14 +117,35 @@ public class AreaCheckServlet {
             String currentTime = LocalDateTime.now().format(DATE_FORMATTER);
 
             String jsonItem = String.format(Locale.US,
-                "{\"x\":%.2f,\"y\":%.2f,\"r\":%.2f,\"hit\":%b,\"currentTime\":\"%s\",\"executionTime\":%d}",
-                x, y, r, hit, currentTime, executionTime
+                "{\"userId\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"r\":%.2f,\"hit\":%b,\"currentTime\":\"%s\",\"executionTime\":%d}",
+                userId, x, y, r, hit, currentTime, executionTime
             );
+
             resultsJson.add(jsonItem);
+            userPointsList.add(jsonItem);
         }
 
         String jsonResponse = "[" + String.join(",", resultsJson) + "]";
         sendJsonResponse(200, jsonResponse);
+    }
+
+    // получение всех сохраненных точек
+    private static String getAllPointsJson() {
+        List<String> allItems = new ArrayList<>();
+        
+        for (List<String> userList : sessionStore.values()) {
+            synchronized (userList) {
+                allItems.addAll(userList);
+            }
+        }
+
+        return "[" + String.join(",", allItems) + "]";
+    }
+
+    // получение одиночного параметра из мапы
+    private static String getQueryParam(Map<String, List<String>> params, String key) {
+        List<String> vals = params.get(key);
+        return (vals != null && !vals.isEmpty()) ? vals.get(0) : null;
     }
 
     // различная математическая валидация
