@@ -249,97 +249,103 @@ document.addEventListener("DOMContentLoaded", () => {
         if (msg) showServerError(msg);
     }
 
-    // подсчет времени от/до сервера
-    function updateServerTimeDiff() {
+    // абстракция посылания запроса
+    function makeGetRequest(queryParams) {
+        return new Promise((resolve, reject) => {
+            if (typeof superagent === "undefined") {
+                return reject(new Error("Библиотека superagent не загружена"));
+            }
+
+            superagent
+                .get(SERVER_URL)
+                .query(queryParams)
+                .accept('text/plain')
+                .timeout(2000)
+                .end((err, res) => {
+                    if (err || !res) {
+                        const statusText = err ? (err.status ? `HTTP ${err.status}` : err.message) : "Нет ответа";
+                        return reject(new Error(`Ошибка подключения к сервлету (${statusText})`));
+                    }
+
+                    try {
+                        const raw = res.text || (typeof res.body === "string" ? res.body : JSON.stringify(res.body));
+                        const parsedData = typeof raw === "string" ? JSON.parse(raw) : res.body;
+                        resolve(parsedData);
+                    } catch (e) {
+                        reject(new Error("Сервер вернул невалидный JSON или ошибку HTML"));
+                    }
+                });
+        });
+    }
+
+    // обновление времени задержки
+    function updateServerTimeUI(timeTo, timeFrom, totalTime) {
         const stateEl = document.getElementById("server-state");
         const toEl = document.getElementById("time-to-server");
         const fromEl = document.getElementById("time-from-server");
         const totalpingEm = document.getElementById("time-tofrom-server");
 
-        if (typeof superagent === "undefined") {
-            setServerOffline("Библиотека superagent не загружена");
-            return;
+        isServerAvailable = true;
+        showServerError(null);
+
+        if (stateEl) {
+            stateEl.textContent = "Доступен";
+            stateEl.className = "state-online";
         }
+        if (toEl) toEl.textContent = timeTo.toFixed(1);
+        if (fromEl) fromEl.textContent = timeFrom.toFixed(1);
+        if (totalpingEm) totalpingEm.textContent = totalTime.toFixed(1);
+    }
 
-        const t1 = Date.now();
+    // замер времени от и до сервера
+    function updateServerTimeDiff() {
+        const clientSendTime = Date.now();
 
-        superagent
-            .get(SERVER_URL)
-            .query({ action: "getServerUnixTime" })
-            .accept('text/plain')
-            .timeout(2000)
-            .end((err, res) => {
-                if (err || !res) {
-                    setServerOffline();
-                    return;
-                }
-
-                let serverTime = null;
-                try {
-                    const raw = res.text || (typeof res.body === "string" ? res.body : JSON.stringify(res.body));
-                    const body = typeof raw === "string" ? JSON.parse(raw) : res.body;
-                    serverTime = body ? body.serverUnixTime : null;
-                } catch (e) {
-                    setServerOffline();
-                    return;
-                }
+        makeGetRequest({ action: "getServerUnixTime" })
+            .then(body => {
+                const clientReceiveTime = Date.now();
+                const serverTime = body ? body.serverUnixTime : null;
 
                 if (!serverTime) {
-                    setServerOffline();
+                    setServerOffline("Некорректный ответ времени от сервера");
                     return;
                 }
 
-                const t2 = Date.now();
-                timeOffset = serverTime - (t1 + (t2 - t1) / 2);
+                // вычисляем смещение по таймзонам
+                const roundTripTime = clientReceiveTime - clientSendTime;
+                timeOffset = serverTime - (clientSendTime + roundTripTime / 2);
 
-                const clientSendTime = Date.now();
+                const adjustedSendTime = clientSendTime + timeOffset;
+                const adjustedReceiveTime = clientReceiveTime + timeOffset;
 
-                superagent
-                    .get(SERVER_URL)
-                    .query({ action: "getServerUnixTime" })
-                    .accept('text/plain')
-                    .timeout(2000)
-                    .end((err2, res2) => {
-                        if (err2 || !res2) {
-                            setServerOffline();
-                            return;
-                        }
+                const timeTo = Math.max(0, serverTime - adjustedSendTime);
+                const timeFrom = Math.max(0, adjustedReceiveTime - serverTime);
+                const totalTime = timeTo + timeFrom;
 
-                        let serverReceiveTime = null;
-                        try {
-                            const raw2 = res2.text || (typeof res2.body === "string" ? res2.body : JSON.stringify(res2.body));
-                            const body2 = typeof raw2 === "string" ? JSON.parse(raw2) : res2.body;
-                            serverReceiveTime = body2 ? body2.serverUnixTime : null;
-                        } catch (e) {
-                            setServerOffline();
-                            return;
-                        }
-
-                        if (!serverReceiveTime) {
-                            setServerOffline();
-                            return;
-                        }
-
-                        const clientReceiveTime = Date.now();
-                        const adjustedSendTime = clientSendTime + timeOffset;
-                        const adjustedReceiveTime = clientReceiveTime + timeOffset;
-
-                        let timeTo = Math.max(0, serverReceiveTime - adjustedSendTime);
-                        let timeFrom = Math.max(0, adjustedReceiveTime - serverReceiveTime);
-                        let totaltime = timeTo + timeFrom;
-
-                        isServerAvailable = true;
-                        showServerError(null);
-
-                        if (stateEl) {
-                            stateEl.textContent = "Доступен";
-                            stateEl.className = "state-online";
-                        }
-                        if (toEl) toEl.textContent = timeTo.toFixed(1);
-                        if (fromEl) fromEl.textContent = timeFrom.toFixed(1);
-                        if (totalpingEm) totalpingEm.textContent = totaltime.toFixed(1);
-                    });
+                updateServerTimeUI(timeTo, timeFrom, totalTime);
+            })
+            .catch(err => {
+                setServerOffline(err.message);
             });
+    }
+
+    // обработка успешного ответа с точками
+    function handleFormResponse(responseData, currentR) {
+        if (Array.isArray(responseData)) {
+            responseData.forEach(item => pointsHistory.push(item));
+            
+            try {
+                localStorage.setItem("lab2_points", JSON.stringify(pointsHistory));
+            } catch (e) {}
+
+            renderTable();
+            drawArea(currentR);
+            updateServerTimeDiff();
+        } else if (responseData && responseData.error) {
+            showServerError("Сервер вернул ошибку: " + responseData.error);
+        } else {
+            showServerError("Получен неизвестный формат ответа от сервера");
+        }
     }
 
     // отправка формы
@@ -362,45 +368,12 @@ document.addEventListener("DOMContentLoaded", () => {
             validData.y.forEach(yVal => queryParams.append("y", yVal));
             queryParams.append("r", validData.r);
 
-            if (typeof superagent === "undefined") {
-                showServerError("Библиотека superagent не загружена");
-                return;
-            }
-
-            superagent
-                .get(SERVER_URL)
-                .query(queryParams.toString())
-                .accept('text/plain')
-                .timeout(2000)
-                .end((err, res) => {
-                    if (err || !res) {
-                        const statusText = err ? (err.status ? "HTTP " + err.status : err.message) : "Нет ответа";
-                        setServerOffline("Ошибка подключения к сервлету (" + statusText + ")");
-                        return;
-                    }
-
-                    let responseData = null;
-                    try {
-                        const raw = res.text || (typeof res.body === "string" ? res.body : JSON.stringify(res.body));
-                        responseData = typeof raw === "string" ? JSON.parse(raw) : res.body;
-                    } catch (e) {
-                        setServerOffline("Сервер вернул невалидный JSON или ошибку HTML");
-                        return;
-                    }
-
-                    if (Array.isArray(responseData)) {
-                        responseData.forEach(item => pointsHistory.push(item));
-                        try {
-                            localStorage.setItem("lab2_points", JSON.stringify(pointsHistory));
-                        } catch (e) {}
-                        renderTable();
-                        drawArea(validData.r);
-                        updateServerTimeDiff();
-                    } else if (responseData && responseData.error) {
-                        showServerError("Сервер вернул ошибку: " + responseData.error);
-                    } else {
-                        showServerError("Получен неизвестный формат ответа от сервера");
-                    }
+            makeGetRequest(queryParams.toString())
+                .then(responseData => {
+                    handleFormResponse(responseData, validData.r);
+                })
+                .catch(err => {
+                    setServerOffline(err.message);
                 });
         });
     }
