@@ -6,7 +6,10 @@ import java.util.*;
 
 public class AreaCheckServlet {
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-    
+    private static final Double[] RANGE_X = {-5.0, 3.0};
+    private static final Double[] RANGE_Y = {-2.0, 2.0};
+    private static final Double[] RANGE_R = {1.0, 5.0};
+
     public static void main(String[] args) {
         FCGIInterface fcgiInterface = new FCGIInterface();
 
@@ -61,11 +64,11 @@ public class AreaCheckServlet {
         double r = Double.parseDouble(rVals.get(0).replace(',', '.'));
 
         if (!isValidX(x)) {
-            sendJsonError("X выходит за границы [-5; 3]");
+            sendJsonError(String.format("X выходит за границы [%.2f; %.2f]", RANGE_X[0], RANGE_X[1]));
             return;
         }
         if (!isValidR(r)) {
-            sendJsonError("R выходит за границы [1; 5]");
+            sendJsonError(String.format("R выходит за границы [%.2f; %.2f]", RANGE_R[0], RANGE_R[1]));
             return;
         }
 
@@ -95,15 +98,15 @@ public class AreaCheckServlet {
 
     // различная математическая валидация
     private static boolean isValidX(double x) {
-        return x >= -5.0 && x <= 3.0;
+        return x >= RANGE_X[0] && x <= RANGE_X[1];
     }
 
     private static boolean isValidY(double y) {
-        return y >= -2.0 && y <= 2.0;
+        return y >= RANGE_Y[0] && y <= RANGE_Y[1];
     }
 
     private static boolean isValidR(double r) {
-        return r >= 1.0 && r <= 5.0;
+        return r >= RANGE_R[0] && r <= RANGE_R[1];
     }
 
     // попадание в область
