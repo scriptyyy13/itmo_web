@@ -5,11 +5,11 @@ import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class AreaCheckServlet {
-
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
+    
     public static void main(String[] args) {
         FCGIInterface fcgiInterface = new FCGIInterface();
 
-        // цикл обработки
         while (fcgiInterface.FCGIaccept() >= 0) {
             long startTime = System.nanoTime();
 
@@ -24,57 +24,12 @@ public class AreaCheckServlet {
 
                 Map<String, List<String>> queryParams = parseQueryString(queryString);
 
-                // отдаем unixtime для расчетов
+                // разделяем запросы
                 if (queryParams.containsKey("action") && "getServerUnixTime".equals(queryParams.get("action").get(0))) {
-                    long currentUnixTime = System.currentTimeMillis();
-                    sendJsonResponse(200, String.format("{\"status\":\"ok\",\"serverUnixTime\":%d}", currentUnixTime));
-                    continue;
+                    handleServerUnixTime();
+                } else {
+                    handleAreaCheck(queryParams, startTime);
                 }
-
-                List<String> xVals = queryParams.get("x");
-                List<String> yVals = queryParams.get("y");
-                List<String> rVals = queryParams.get("r");
-
-                if (xVals == null || yVals == null || rVals == null || xVals.isEmpty() || yVals.isEmpty() || rVals.isEmpty()) {
-                    sendJsonError("Не переданы все параметры (x, y, r)");
-                    continue;
-                }
-
-                double x = Double.parseDouble(xVals.get(0).replace(',', '.'));
-                double r = Double.parseDouble(rVals.get(0).replace(',', '.'));
-
-                if (x < -5 || x > 3) {
-                    sendJsonError("X выходит за границы [-5; 3]");
-                    continue;
-                }
-                if (r < 1 || r > 5) {
-                    sendJsonError("R выходит за границы [1; 5]");
-                    continue;
-                }
-
-                List<String> resultsJson = new ArrayList<>();
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss");
-
-                for (String yStr : yVals) {
-                    double y = Double.parseDouble(yStr.replace(',', '.'));
-
-                    if (y < -2 || y > 2) {
-                        continue;
-                    }
-
-                    boolean hit = checkHit(x, y, r);
-                    long executionTime = (System.nanoTime() - startTime) / 1000;
-                    String currentTime = LocalDateTime.now().format(formatter);
-
-                    String jsonItem = String.format(Locale.US,
-                        "{\"x\":%.2f,\"y\":%.2f,\"r\":%.2f,\"hit\":%b,\"currentTime\":\"%s\",\"executionTime\":%d}",
-                        x, y, r, hit, currentTime, executionTime
-                    );
-                    resultsJson.add(jsonItem);
-                }
-
-                String jsonResponse = "[" + String.join(",", resultsJson) + "]";
-                sendJsonResponse(200, jsonResponse);
 
             } catch (NumberFormatException e) {
                 sendJsonError("Некорректный числовой формат");
@@ -82,6 +37,73 @@ public class AreaCheckServlet {
                 sendJsonError("Ошибка сервера: " + e.getMessage());
             }
         }
+    }
+
+    // обработка запроса системного времени
+    private static void handleServerUnixTime() {
+        long currentUnixTime = System.currentTimeMillis();
+        String json = String.format("{\"status\":\"ok\",\"serverUnixTime\":%d}", currentUnixTime);
+        sendJsonResponse(200, json);
+    }
+
+    // обработка запроса на попадание
+    private static void handleAreaCheck(Map<String, List<String>> queryParams, long startTime) {
+        List<String> xVals = queryParams.get("x");
+        List<String> yVals = queryParams.get("y");
+        List<String> rVals = queryParams.get("r");
+
+        if (xVals == null || yVals == null || rVals == null || xVals.isEmpty() || yVals.isEmpty() || rVals.isEmpty()) {
+            sendJsonError("Не переданы все параметры (x, y, r)");
+            return;
+        }
+
+        double x = Double.parseDouble(xVals.get(0).replace(',', '.'));
+        double r = Double.parseDouble(rVals.get(0).replace(',', '.'));
+
+        if (!isValidX(x)) {
+            sendJsonError("X выходит за границы [-5; 3]");
+            return;
+        }
+        if (!isValidR(r)) {
+            sendJsonError("R выходит за границы [1; 5]");
+            return;
+        }
+
+        List<String> resultsJson = new ArrayList<>();
+
+        for (String yStr : yVals) {
+            double y = Double.parseDouble(yStr.replace(',', '.'));
+
+            if (!isValidY(y)) {
+                continue;
+            }
+
+            boolean hit = checkHit(x, y, r);
+            long executionTime = (System.nanoTime() - startTime) / 1000;
+            String currentTime = LocalDateTime.now().format(DATE_FORMATTER);
+
+            String jsonItem = String.format(Locale.US,
+                "{\"x\":%.2f,\"y\":%.2f,\"r\":%.2f,\"hit\":%b,\"currentTime\":\"%s\",\"executionTime\":%d}",
+                x, y, r, hit, currentTime, executionTime
+            );
+            resultsJson.add(jsonItem);
+        }
+
+        String jsonResponse = "[" + String.join(",", resultsJson) + "]";
+        sendJsonResponse(200, jsonResponse);
+    }
+
+    // различная математическая валидация
+    private static boolean isValidX(double x) {
+        return x >= -5.0 && x <= 3.0;
+    }
+
+    private static boolean isValidY(double y) {
+        return y >= -2.0 && y <= 2.0;
+    }
+
+    private static boolean isValidR(double r) {
+        return r >= 1.0 && r <= 5.0;
     }
 
     // попадание в область
@@ -116,11 +138,16 @@ public class AreaCheckServlet {
     // отправка json
     private static void sendJsonResponse(int statusCode, String jsonBody) {
         byte[] bytes = jsonBody.getBytes(StandardCharsets.UTF_8);
-        String response = "HTTP/1.1 " + statusCode + " OK\r\n" +
-                "Content-Type: application/json; charset=utf-8\r\n" +
-                "Content-Length: " + bytes.length + "\r\n" +
-                "Connection: close\r\n\r\n" +
-                jsonBody;
+        
+        String response = String.format(
+            "HTTP/1.1 %d OK\r\n" +
+            "Content-Type: application/json; charset=utf-8\r\n" +
+            "Content-Length: %d\r\n" +
+            "Connection: close\r\n\r\n" +
+            "%s",
+            statusCode, bytes.length, jsonBody
+        );
+
         System.out.print(response);
         System.out.flush();
     }
